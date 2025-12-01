@@ -12,12 +12,12 @@ export default function Card({ title, subtitle, value, accent }: Props) {
       : "from-sky-400 to-sky-600";
 
   return (
-    <div className="glass-card p-5 flex flex-col justify-between">
+    <div className="glass-card transition-colors p-5 flex flex-col justify-between">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-sm font-medium text-slate-200">{title}</h2>
+          <h2 className="text-sm font-medium text-main">{title}</h2>
           {subtitle && (
-            <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+            <p className="text-xs text-muted mt-0.5">{subtitle}</p>
           )}
         </div>
         {accent && (
@@ -28,10 +28,10 @@ export default function Card({ title, subtitle, value, accent }: Props) {
           </div>
         )}
       </div>
-      <p className="text-3xl font-semibold tracking-tight text-slate-50">
+      <p className="text-3xl font-semibold tracking-tight text-main">
         {value}
       </p>
-      <p className="mt-2 text-[11px] text-slate-500">
+      <p className="mt-2 text-[11px] text-muted">
         Nominal dalam satuan rupiah digital.
       </p>
     </div>

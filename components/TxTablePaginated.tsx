@@ -16,10 +16,10 @@ export default function TxTablePaginated({ page, onChangePage }: any) {
   }));
 
   return (
-    <div className="glass-card p-6">
-      <table className="w-full text-sm mb-4">
+    <div className="glass-card transition-colors p-6">
+      <table className="w-full text-sm text-muted mb-4">
         <thead>
-          <tr className="border-b border-slate-700/60 text-slate-400">
+          <tr className="border-b border-slate-700/60 text-muted">
             <th className="py-2 text-left">#</th>
             <th className="py-2 text-left">Waktu</th>
             <th className="py-2 text-left">Jenis</th>
@@ -50,7 +50,7 @@ export default function TxTablePaginated({ page, onChangePage }: any) {
           Prev
         </button>
 
-        <span className="text-slate-400">
+        <span className="text-muted">
           Page {page} / {pages}
         </span>
 

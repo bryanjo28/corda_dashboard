@@ -7,6 +7,7 @@ import Input from "@/components/Input";
 import Select from "@/components/Select";
 import TxTable, { TxRow } from "@/components/TxTable";
 import { useToast } from "@/components/toast/useToast";
+import { useTxStore } from "@/lib/txStore";
 
 type Bank = "A" | "B";
 
@@ -31,7 +32,7 @@ export default function DashboardPage() {
   const [redeemIssuer, setRedeemIssuer] = useState("PartyA");
   const [redeemStatus, setRedeemStatus] = useState<string>("");
 
-  const [txs, setTxs] = useState<TxRow[]>([]);
+  const { txs, pushTx } = useTxStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ---------- Fetch Saldo ----------
@@ -56,18 +57,9 @@ export default function DashboardPage() {
     fetchSaldo();
   }, []);
 
-  const pushTx = (row: Omit<TxRow, "id" | "time">) => {
-    setTxs((prev) => [
-      {
-        id: prev.length + 1,
-        time: new Date().toLocaleTimeString(),
-        ...row,
-      },
-      ...prev,
-    ]);
-  };
+  
 
-  // ---------- Issue ----------
+// ---------- Issue ----------
 const handleIssue = async () => {
   if (!issueAmount || Number(issueAmount) <= 0) {
     toast.error("Jumlah issue tidak valid.");
@@ -86,24 +78,25 @@ const handleIssue = async () => {
     const txt = await res.text();
     setIssueStatus(txt);
 
-    // Cek apakah berhasil
     if (txt.includes("Issued")) {
       toast.success("Issue berhasil!");
 
-      // Cari txHash seperti versi HTML lama
+      // Ambil hash
       const match = txt.match(/Issued\s+([^\s]+)/);
       const hash = match ? match[1] : "";
 
       if (hash) {
         setTxHash(hash);
+
+        // ⬇⬇⬇ ADD REAL TX KE HISTORY STORE
         pushTx({
+          time: new Date().toLocaleTimeString(),
           type: "Issue",
           txHash: hash,
           description: `Issue Rp ${issueAmount} → ${issueOwner}`,
         });
       }
     } else {
-      // API jalan tapi hasil tidak OK
       toast.error("Issue gagal!");
     }
 
@@ -115,6 +108,7 @@ const handleIssue = async () => {
     setIsSubmitting(false);
   }
 };
+
 
 
   // ---------- Transfer ----------
@@ -145,7 +139,9 @@ const handleTransfer = async () => {
     if (txt.includes("Transferred") || txt.includes("Success")) {
       toast.success("Transfer berhasil!");
 
+      // ⬇⬇⬇ ADD TX KE HISTORY STORE
       pushTx({
+        time: new Date().toLocaleTimeString(),
         type: "Transfer",
         txHash: txHash.trim(),
         description: `A → ${newOwner} (idx: ${txIndex})`,
@@ -165,8 +161,7 @@ const handleTransfer = async () => {
 };
 
 
-  // ---------- Redeem ----------
- 
+// ---------- Redeem ----------
 const handleRedeem = async () => {
   if (!redeemAmount || Number(redeemAmount) <= 0) {
     toast.error("Jumlah redeem tidak valid.");
@@ -192,11 +187,14 @@ const handleRedeem = async () => {
     if (txt.includes("Redeemed") || txt.includes("Success")) {
       toast.success("Redeem berhasil!");
 
+      // ⬇⬇⬇ ADD TX KE HISTORY STORE
       pushTx({
+        time: new Date().toLocaleTimeString(),
         type: "Redeem",
         txHash: "-",
         description: `Redeem Rp ${redeemAmount} via ${redeemIssuer}`,
       });
+
     } else {
       toast.error("Redeem gagal.");
     }
@@ -210,10 +208,11 @@ const handleRedeem = async () => {
   }
 };
 
+
   const disabled = isSubmitting;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
+    <div className="min-h-screen bg-[color:var(--bg-main)] text-main">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Top bar */}
         <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -221,7 +220,7 @@ const handleRedeem = async () => {
             <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
               Corda Rupiah Dashboard
             </h1>
-            <p className="text-sm md:text-base text-slate-400 mt-1">
+            <p className="text-sm text-[var(--text-muted)]">
               Simulasi issue, transfer & redeem dengan tampilan banking-grade.
             </p>
           </div>
@@ -229,7 +228,7 @@ const handleRedeem = async () => {
             variant="ghost"
             onClick={fetchSaldo}
             loading={loadingSaldo}
-            className="self-start md:self-auto"
+            className="text-main self-start md:self-auto"
           >
             Refresh Saldo
           </Button>
@@ -254,10 +253,10 @@ const handleRedeem = async () => {
         {/* Action panels */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Issue */}
-          <div className="glass-card p-5 flex flex-col gap-4">
+          <div className="glass-card transition-colors p-5 flex flex-col gap-4">
             <div>
               <h2 className="text-lg font-semibold">1. Issue Uang Baru</h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted">
                 Bank A menerbitkan rupiah digital ke account tertentu.
               </p>
             </div>
@@ -278,7 +277,7 @@ const handleRedeem = async () => {
               ]}
             />
             {issueStatus && (
-              <p className="text-xs text-slate-300 bg-slate-900/60 px-3 py-2 rounded-lg border border-slate-700/70">
+              <p className="text-xs text-main bg-slate-900/60 px-3 py-2 rounded-lg border border-slate-700/70">
                 {issueStatus}
               </p>
             )}
@@ -288,10 +287,10 @@ const handleRedeem = async () => {
           </div>
 
           {/* Transfer */}
-          <div className="glass-card p-5 flex flex-col gap-4">
+          <div className="glass-card transition-colors p-5 flex flex-col gap-4">
             <div>
               <h2 className="text-lg font-semibold">2. Transfer Uang</h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted">
                 Gunakan txHash hasil issue untuk memindahkan kepemilikan.
               </p>
             </div>
@@ -318,7 +317,7 @@ const handleRedeem = async () => {
               ]}
             />
             {transferStatus && (
-              <p className="text-xs text-slate-300 bg-slate-900/60 px-3 py-2 rounded-lg border border-slate-700/70">
+              <p className="text-xs text-main bg-slate-900/60 px-3 py-2 rounded-lg border border-slate-700/70">
                 {transferStatus}
               </p>
             )}
@@ -328,10 +327,10 @@ const handleRedeem = async () => {
           </div>
 
           {/* Redeem */}
-          <div className="glass-card p-5 flex flex-col gap-4">
+          <div className="glass-card transition-colors p-5 flex flex-col gap-4">
             <div>
               <h2 className="text-lg font-semibold">3. Redeem (Penebusan)</h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted">
                 Bank B menebus saldo kembali ke Bank A sebagai issuer.
               </p>
             </div>
@@ -352,7 +351,7 @@ const handleRedeem = async () => {
               ]}
             />
             {redeemStatus && (
-              <p className="text-xs text-slate-300 bg-slate-900/60 px-3 py-2 rounded-lg border border-slate-700/70">
+              <p className="text-xs text-main bg-slate-900/60 px-3 py-2 rounded-lg border border-slate-700/70">
                 {redeemStatus}
               </p>
             )}
@@ -363,11 +362,11 @@ const handleRedeem = async () => {
         </section>
 
         {/* Transaction history */}
-        <section className="glass-card p-5">
+        <section className="glass-card transition-colors p-5">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-lg font-semibold">Riwayat Transaksi</h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted">
                 Issue, transfer, dan redeem terbaru akan muncul di sini.
               </p>
             </div>
