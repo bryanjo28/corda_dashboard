@@ -1,18 +1,37 @@
 import { NextResponse } from "next/server";
-
-const API_A = "http://localhost:8080/api/rupiah";
+import { CordaAPI } from "../_config/corda";
+import { detectOwner } from "../_utils/detectOwner";
 
 export async function POST(req: Request) {
   const { txHash, index, newOwner } = await req.json();
 
+  const owner = await detectOwner(txHash, index);
+
+  if (!owner) {
+    return NextResponse.json(
+      { status: "error", message: "Owner state tidak ditemukan" },
+      { status: 400 }
+    );
+  }
+
+  const bank = owner.replace("Party", "") as "A" | "B" | "C";
+  const apiBase = CordaAPI[bank];
+
   try {
     const res = await fetch(
-      `${API_A}/transfer?txHash=${txHash}&index=${index}&newOwner=${encodeURIComponent(newOwner)}`,
+      `${apiBase}/transfer?txHash=${encodeURIComponent(
+        txHash
+      )}&index=${index}&newOwner=${encodeURIComponent(newOwner)}`,
       { method: "POST" }
-    ).then((r) => r.text());
+    );
 
-    return new Response(res);
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    return NextResponse.json("Transfer failed", { status: 500 });
+    console.error("Transfer error:", err);
+    return NextResponse.json(
+      { status: "error", message: "Transfer failed" },
+      { status: 500 }
+    );
   }
 }

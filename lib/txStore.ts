@@ -9,6 +9,7 @@ export interface TxRow {
   time: string;
   type: TxType;
   txHash: string;
+  index: number;
   description: string;
 }
 

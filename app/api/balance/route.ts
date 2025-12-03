@@ -1,18 +1,24 @@
 import { NextResponse } from "next/server";
-
-const API_A = "http://localhost:8080/api/rupiah";
-const API_B = "http://localhost:8081/api/rupiah";
+import { getNode } from "../_config/corda";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const bank = searchParams.get("bank");
+  const bank = searchParams.get("bank") as any;
 
-  const url = bank === "A" ? `${API_A}/balance` : `${API_B}/balance`;
+  if (!bank || !["A", "B", "C"].includes(bank)) {
+    return NextResponse.json(
+      { error: "bank must be A, B, or C" },
+      { status: 400 }
+    );
+  }
+
+  const url = `${getNode(bank)}/balance`;
 
   try {
     const saldo = await fetch(url).then((r) => r.text());
-    return NextResponse.json(saldo);
+    return NextResponse.json({ balance: saldo });
   } catch (err) {
-    return NextResponse.json("Error", { status: 500 });
+    console.error(err);
+    return NextResponse.json({ error: "Balance lookup failed" }, { status: 500 });
   }
 }

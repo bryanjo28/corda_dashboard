@@ -32,181 +32,249 @@ export default function DashboardPage() {
   const [redeemIssuer, setRedeemIssuer] = useState("PartyA");
   const [redeemStatus, setRedeemStatus] = useState<string>("");
 
+  const [currentOwner, setCurrentOwner] = useState<"PartyA" | "PartyB" | "">("");
+
+
   const { txs, pushTx } = useTxStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const formatIDR = (value: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(value);
+  };
 
   // ---------- Fetch Saldo ----------
   const fetchSaldo = async () => {
     try {
       setLoadingSaldo(true);
+
       const [a, b] = await Promise.all([
         fetch("/api/balance?bank=A").then((r) => r.text()),
         fetch("/api/balance?bank=B").then((r) => r.text()),
       ]);
-      setSaldoA(a);
-      setSaldoB(b);
+
+      const cleanA = a.replace(/^"|"$/g, "").trim();
+      const cleanB = b.replace(/^"|"$/g, "").trim();
+
+      setSaldoA(cleanA);
+      setSaldoB(cleanB);
+
+      // DETECT OWNER
+      const valA = parseInt(cleanA.replace(/[^\d]/g, ""));
+      const valB = parseInt(cleanB.replace(/[^\d]/g, ""));
+
+      if (valA > 0) {
+        setCurrentOwner("PartyA");
+      } else if (valB > 0) {
+        setCurrentOwner("PartyB");
+      } else {
+        setCurrentOwner(""); // nothing active
+      }
+
     } catch (err) {
       setSaldoA("Error");
       setSaldoB("Error");
+      setCurrentOwner("");
     } finally {
       setLoadingSaldo(false);
     }
   };
 
+
   useEffect(() => {
     fetchSaldo();
   }, []);
 
-  
 
-// ---------- Issue ----------
-const handleIssue = async () => {
-  if (!issueAmount || Number(issueAmount) <= 0) {
-    toast.error("Jumlah issue tidak valid.");
-    return;
-  }
+  // 🔧 Utility: simpan transaksi ke database / JSON file
+  const saveTransaction = async (tx: any) => {
+    try {
+      await fetch("/api/txHistory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tx),
+      });
+    } catch (err) {
+      console.error("❌ Gagal menyimpan transaksi:", err);
+    }
+  };
 
-  setIsSubmitting(true);
-  toast.info("Memproses issue...");
+  //Issue
+  const handleIssue = async () => {
+    if (!issueAmount || Number(issueAmount) <= 0) {
+      toast.error("Jumlah issue tidak valid.");
+      return;
+    }
 
-  try {
-    const res = await fetch("/api/issue", {
-      method: "POST",
-      body: JSON.stringify({ amount: issueAmount, owner: issueOwner }),
-    });
+    setIsSubmitting(true);
+    toast.info("Memproses issue...");
 
-    const txt = await res.text();
-    setIssueStatus(txt);
+    try {
+      const res = await fetch("/api/issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: Number(issueAmount),
+          owner: issueOwner,
+        }),
+      });
 
-    if (txt.includes("Issued")) {
-      toast.success("Issue berhasil!");
+      const data = await res.json().catch(() => null);
 
-      // Ambil hash
-      const match = txt.match(/Issued\s+([^\s]+)/);
-      const hash = match ? match[1] : "";
+      console.log("FE /api/issue status:", res.status);
+      console.log("FE /api/issue data:", data);
 
-      if (hash) {
-        setTxHash(hash);
+      const ok =
+        data &&
+        (data.status === "success" ||
+          !!data.txId); // fallback: kalau ada txId, anggap sukses
 
-        // ⬇⬇⬇ ADD REAL TX KE HISTORY STORE
-        pushTx({
-          time: new Date().toLocaleTimeString(),
-          type: "Issue",
-          txHash: hash,
+      setIssueStatus(
+        (data && data.message) ||
+        (ok ? "Issue berhasil." : "Status tidak diketahui")
+      );
+
+      if (ok) {
+        toast.success("Issue berhasil!");
+
+        const tx = {
+          time: new Date().toISOString(),
+          type: "Issue" as const,
+          txHash: data.txId,
+          index: data.index ?? 0, // kalau BE belum kirim index, default 0
           description: `Issue Rp ${issueAmount} → ${issueOwner}`,
-        });
+        };
+
+        pushTx(tx);
+        await saveTransaction(tx);
+      } else {
+        toast.error("Issue gagal.");
       }
-    } else {
-      toast.error("Issue gagal!");
+
+      await fetchSaldo();
+    } catch (err) {
+      console.error(err);
+      toast.error("Terjadi kesalahan jaringan.");
+      setIssueStatus("Gagal issue.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
+  // ---------- TRANSFER ----------
+  const handleTransfer = async () => {
+    if (!txHash.trim()) {
+      toast.error("Mohon isi txHash terlebih dahulu.");
+      setTransferStatus("Isi txHash dulu.");
+      return;
     }
 
-    await fetchSaldo();
-  } catch (err) {
-    toast.error("Terjadi kesalahan jaringan.");
-    setIssueStatus("Gagal issue.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+    if (!txIndex) {
+      toast.error("Index state tidak ditemukan.");
+      return;
+    }
 
+    setIsSubmitting(true);
+    setTransferStatus("Memproses transfer...");
+    toast.info("Memproses transfer...");
 
-
-  // ---------- Transfer ----------
-const handleTransfer = async () => {
-  if (!txHash.trim()) {
-    toast.error("Mohon isi txHash terlebih dahulu.");
-    setTransferStatus("Isi txHash dulu.");
-    return;
-  }
-
-  setIsSubmitting(true);
-  setTransferStatus("Memproses transfer...");
-  toast.info("Memproses transfer...");
-
-  try {
-    const res = await fetch("/api/transfer", {
-      method: "POST",
-      body: JSON.stringify({
-        txHash: txHash.trim(),
-        index: Number(txIndex || 0),
-        newOwner,
-      }),
-    });
-
-    const txt = await res.text();
-    setTransferStatus(txt);
-
-    if (txt.includes("Transferred") || txt.includes("Success")) {
-      toast.success("Transfer berhasil!");
-
-      // ⬇⬇⬇ ADD TX KE HISTORY STORE
-      pushTx({
-        time: new Date().toLocaleTimeString(),
-        type: "Transfer",
-        txHash: txHash.trim(),
-        description: `A → ${newOwner} (idx: ${txIndex})`,
+    try {
+      const res = await fetch("/api/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txHash: txHash.trim(),
+          index: Number(txIndex),     // <--- INDEX BENAR
+          newOwner                   // <--- owner baru
+        }),
       });
 
-    } else {
-      toast.error("Transfer gagal.");
+      const data = await res.json();
+      setTransferStatus(data.message || "Status tidak diketahui");
+
+      if (data.status === "success") {
+        toast.success("Transfer berhasil!");
+
+        // 🔥 Transfer juga return index output baru
+        const tx = {
+          time: new Date().toISOString(),
+          type: "Transfer" as const,
+          txHash: data.txId,
+          index: data.index,         // <--- SIMPAN INDEX BARU
+          description: `${newOwner} menerima kepemilikan`
+        };
+
+        pushTx(tx);
+        await saveTransaction(tx);
+      } else {
+        toast.error("Transfer gagal.");
+      }
+
+      await fetchSaldo();
+    } catch (err) {
+      console.error(err);
+      toast.error("Terjadi kesalahan jaringan.");
+      setTransferStatus("Gagal transfer.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
+  const handleRedeem = async () => {
+    if (!redeemAmount || Number(redeemAmount) <= 0) {
+      toast.error("Jumlah redeem tidak valid.");
+      return;
     }
 
-    await fetchSaldo();
-  } catch (err) {
-    toast.error("Terjadi kesalahan jaringan.");
-    setTransferStatus("Gagal transfer.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+    setIsSubmitting(true);
+    setRedeemStatus("Memproses redeem...");
+    toast.info("Memproses redeem...");
 
-
-// ---------- Redeem ----------
-const handleRedeem = async () => {
-  if (!redeemAmount || Number(redeemAmount) <= 0) {
-    toast.error("Jumlah redeem tidak valid.");
-    return;
-  }
-
-  setIsSubmitting(true);
-  setRedeemStatus("Memproses redeem...");
-  toast.info("Memproses redeem...");
-
-  try {
-    const res = await fetch("/api/redeem", {
-      method: "POST",
-      body: JSON.stringify({
-        amount: redeemAmount,
-        issuer: redeemIssuer,
-      }),
-    });
-
-    const txt = await res.text();
-    setRedeemStatus(txt);
-
-    if (txt.includes("Redeemed") || txt.includes("Success")) {
-      toast.success("Redeem berhasil!");
-
-      // ⬇⬇⬇ ADD TX KE HISTORY STORE
-      pushTx({
-        time: new Date().toLocaleTimeString(),
-        type: "Redeem",
-        txHash: "-",
-        description: `Redeem Rp ${redeemAmount} via ${redeemIssuer}`,
+    try {
+      const res = await fetch("/api/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: redeemAmount,
+          issuer: redeemIssuer,
+        }),
       });
 
-    } else {
-      toast.error("Redeem gagal.");
-    }
+      const data = await res.json();
+      setRedeemStatus(data.message || "Status tidak diketahui");
 
-    await fetchSaldo();
-  } catch (err) {
-    toast.error("Terjadi kesalahan jaringan.");
-    setRedeemStatus("Gagal redeem.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+      if (data.status === "success") {
+        toast.success("Redeem berhasil!");
+
+        const tx = {
+          time: new Date().toISOString(),
+          type: "Redeem" as const,
+          txHash: data.txId,
+          index: -1,   // <------------------- FIX di sini
+          description: `Redeem Rp ${redeemAmount} via ${redeemIssuer}`
+        };
+
+        pushTx(tx);
+        await saveTransaction(tx);
+      } else {
+        toast.error("Redeem gagal.");
+      }
+
+      await fetchSaldo();
+    } catch (err) {
+      console.error(err);
+      toast.error("Terjadi kesalahan jaringan.");
+      setRedeemStatus("Gagal redeem.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
 
 
   const disabled = isSubmitting;
@@ -300,13 +368,13 @@ const handleRedeem = async () => {
               value={txHash}
               onChange={(e) => setTxHash(e.target.value)}
             />
-            <Input
-              label="Index"
+            {/* <Input
+              label="Jumlah (Rp)"
               type="number"
               min={0}
               value={txIndex}
               onChange={(e) => setTxIndex(e.target.value)}
-            />
+            /> */}
             <Select
               label="Pemilik Baru"
               value={newOwner}
@@ -359,19 +427,6 @@ const handleRedeem = async () => {
               Redeem
             </Button>
           </div>
-        </section>
-
-        {/* Transaction history */}
-        <section className="glass-card transition-colors p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-lg font-semibold">Riwayat Transaksi</h2>
-              <p className="text-xs text-muted">
-                Issue, transfer, dan redeem terbaru akan muncul di sini.
-              </p>
-            </div>
-          </div>
-          <TxTable rows={txs} />
         </section>
       </div>
     </div>

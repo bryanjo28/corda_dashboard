@@ -1,18 +1,31 @@
 import { NextResponse } from "next/server";
-
-const API_B = "http://localhost:8081/api/rupiah";
+import { getNode } from "../_config/corda";
 
 export async function POST(req: Request) {
-  const { amount, issuer } = await req.json();
+  const { amount, issuer, bank } = await req.json();
+
+  if (!bank || !["A", "B", "C"].includes(bank)) {
+    return NextResponse.json(
+      { error: "bank must be A, B, or C" },
+      { status: 400 }
+    );
+  }
 
   try {
     const res = await fetch(
-      `${API_B}/redeem?amount=${amount}&issuer=${encodeURIComponent(issuer)}`,
+      `${getNode(bank)}/redeem?amount=${amount}&issuer=${encodeURIComponent(
+        issuer
+      )}`,
       { method: "POST" }
-    ).then((r) => r.text());
+    );
 
-    return new Response(res);
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    return NextResponse.json("Redeem failed", { status: 500 });
+    console.error("Redeem error:", err);
+    return NextResponse.json(
+      { error: "Redeem failed" },
+      { status: 500 }
+    );
   }
 }
