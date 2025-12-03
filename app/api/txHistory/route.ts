@@ -44,11 +44,16 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type"); // Issue | Transfer | Redeem
+    const bank = searchParams.get("bank"); // optional filter by bank
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const skip = (page - 1) * limit;
 
-    const filter = type && type !== "All" ? { type } : {};
+    const filter: Record<string, any> = {};
+    if (type && type !== "All") filter.type = type;
+    if (bank && bank !== "ALL") {
+      filter.participants = { $in: [bank] };
+    }
 
     const [txs, total] = await Promise.all([
       db.collection("transactions")
@@ -80,6 +85,8 @@ export async function POST(req: Request) {
     const doc = {
       ...body,
       time: new Date().toISOString(),
+      participants: body.participants ?? [],
+      owner: body.owner ?? null,
     };
 
     const result = await db.collection("transactions").insertOne(doc);

@@ -2,14 +2,16 @@ interface Props {
   title: string;
   subtitle?: string;
   value: string | number;
-  accent?: "A" | "B";
+  accent?: "A" | "B" | "C";
 }
 
 export default function Card({ title, subtitle, value, accent }: Props) {
   const badge =
     accent === "A"
       ? "from-emerald-400 to-emerald-600"
-      : "from-sky-400 to-sky-600";
+      : accent === "B"
+      ? "from-sky-400 to-sky-600"
+      : "from-amber-400 to-amber-600";
 
   return (
     <div className="glass-card transition-colors p-5 flex flex-col justify-between">

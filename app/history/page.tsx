@@ -4,15 +4,16 @@ import { useEffect, useState } from "react";
 import Modal from "@/components/modal/Modal";
 import { useToast } from "@/components/toast/useToast";
 
+type Bank = "A" | "B" | "C";
+
 interface TxRow {
   _id: string;
   time: string;
   type: string;
   txHash: string;
   description: string;
+  owner?: string;
 }
-
-
 
 export default function HistoryPage() {
   const toast = useToast();
@@ -23,34 +24,58 @@ export default function HistoryPage() {
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState("All");
+  const [bank, setBank] = useState<Bank | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const pages = Math.ceil(total / limit);
 
   const formatDate = (isoTime: string) => {
     return new Intl.DateTimeFormat("id-ID", {
-      dateStyle: "short",   // contoh: 02/12/2025
-      timeStyle: "medium",  // contoh: 09.50.56
+      dateStyle: "short",
+      timeStyle: "medium",
       hour12: false,
     })
       .format(new Date(isoTime))
-      .replace(/\./g, ":"); // ubah semua titik jadi titik dua
+      .replace(/\./g, ":");
   };
 
+  const fetchSession = async () => {
+    const res = await fetch("/api/auth/session");
+    const data = await res.json();
+    setBank(data?.user?.bank || null);
+    setLoading(false);
+  };
 
   const fetchHistory = async () => {
-    const res = await fetch(
-      `/api/txHistory?type=${filter}&page=${page}&limit=${limit}`
-    );
-    const data = await res.json();
-    setTxs(data.txs);
-    setTotal(data.total);
+    if (!bank) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        type: filter,
+        page: String(page),
+        limit: String(limit),
+      });
+      if (bank !== "A") params.set("bank", bank);
+
+      const res = await fetch(`/api/txHistory?${params.toString()}`);
+      const data = await res.json();
+      setTxs(data.txs);
+      setTotal(data.total);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, [page, filter]);
+    fetchSession();
+  }, []);
+
+  useEffect(() => {
+    if (bank) fetchHistory();
+  }, [page, filter, bank]);
 
   return (
-    <div className="ml-64 pt-20 px-8 min-h-screen">
+    <div className="px-8 py-6 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-main">Riwayat Transaksi</h1>
 
@@ -76,6 +101,7 @@ export default function HistoryPage() {
             <tr className="border-b border-[var(--border-color)] text-[var(--text-muted)]">
               <th className="py-2 text-left">Waktu</th>
               <th className="py-2 text-left">Jenis</th>
+              <th className="py-2 text-left">Owner</th>
               <th className="py-2 text-left">txHash</th>
               <th className="py-2 text-left">Deskripsi</th>
             </tr>
@@ -83,8 +109,8 @@ export default function HistoryPage() {
           <tbody>
             {txs.length === 0 ? (
               <tr>
-                <td colSpan={4} className="py-4 text-center text-muted">
-                  Tidak ada transaksi.
+                <td colSpan={5} className="py-4 text-center text-muted">
+                  {loading ? "Memuat..." : "Tidak ada transaksi."}
                 </td>
               </tr>
             ) : (
@@ -94,10 +120,9 @@ export default function HistoryPage() {
                   onClick={() => setSelected(tx)}
                   className="border-b border-[var(--border-color)] hover:bg-slate-800/30 cursor-pointer transition"
                 >
-                  <td className="py-2">
-                    {formatDate(tx.time)}
-                  </td>
+                  <td className="py-2">{formatDate(tx.time)}</td>
                   <td>{tx.type}</td>
+                  <td>{tx.owner || "-"}</td>
                   <td className="text-emerald-400 truncate max-w-[200px]">
                     {tx.txHash}
                   </td>
@@ -138,8 +163,7 @@ export default function HistoryPage() {
         {selected && (
           <div className="text-sm text-[var(--text-muted)] space-y-2">
             <p>
-              <b>Waktu:</b>{" "}
-              {formatDate(selected.time)}
+              <b>Waktu:</b> {formatDate(selected.time)}
             </p>
             <p
               className="break-all text-emerald-400 font-mono cursor-pointer hover:text-emerald-300 transition"
@@ -157,18 +181,17 @@ export default function HistoryPage() {
                 }
               }}
             >
-
               <b className="text-[var(--text-muted)] mr-1">txHash:</b>
               <span className="bg-emerald-500/10 px-2 py-1 rounded-md select-text">
                 {selected.txHash}
               </span>
             </p>
 
-            {/* <p className="break-all">
-              <b>txHash:</b> {selected.txHash}
-            </p> */}
             <p>
               <b>Deskripsi:</b> {selected.description}
+            </p>
+            <p>
+              <b>Owner sekarang:</b> {selected.owner || "-"}
             </p>
           </div>
         )}
