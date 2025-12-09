@@ -13,6 +13,9 @@ interface TxRow {
   txHash: string;
   description: string;
   owner?: string;
+  amount?: number;
+  newOwnerIndex?: number | null;
+  remainingOwnerIndex?: number | null;
 }
 
 export default function HistoryPage() {
@@ -102,6 +105,7 @@ export default function HistoryPage() {
               <th className="py-2 text-left">Waktu</th>
               <th className="py-2 text-left">Jenis</th>
               <th className="py-2 text-left">Owner</th>
+              <th className="py-2 text-left">Index</th>
               <th className="py-2 text-left">txHash</th>
               <th className="py-2 text-left">Deskripsi</th>
             </tr>
@@ -123,6 +127,15 @@ export default function HistoryPage() {
                   <td className="py-2">{formatDate(tx.time)}</td>
                   <td>{tx.type}</td>
                   <td>{tx.owner || "-"}</td>
+                  <td>
+                    {tx.newOwnerIndex !== undefined && tx.newOwnerIndex !== null
+                      ? `New: ${tx.newOwnerIndex}${
+                          tx.remainingOwnerIndex !== undefined && tx.remainingOwnerIndex !== null
+                            ? `, Sisa: ${tx.remainingOwnerIndex}`
+                            : ""
+                        }`
+                      : "-"}
+                  </td>
                   <td className="text-emerald-400 truncate max-w-[200px]">
                     {tx.txHash}
                   </td>
@@ -193,6 +206,17 @@ export default function HistoryPage() {
             <p>
               <b>Owner sekarang:</b> {selected.owner || "-"}
             </p>
+            {(selected.newOwnerIndex !== undefined || selected.remainingOwnerIndex !== undefined) && (
+              <p>
+                <b>Index:</b>{" "}
+                {selected.newOwnerIndex !== undefined && selected.newOwnerIndex !== null
+                  ? `NewOwnerIndex ${selected.newOwnerIndex}`
+                  : "-"}
+                {selected.remainingOwnerIndex !== undefined &&
+                  selected.remainingOwnerIndex !== null &&
+                  ` | RemainingOwnerIndex ${selected.remainingOwnerIndex}`}
+              </p>
+            )}
           </div>
         )}
       </Modal>

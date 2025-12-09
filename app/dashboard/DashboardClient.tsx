@@ -11,15 +11,6 @@ import { Session } from "next-auth";
 
 type Bank = "A" | "B" | "C";
 
-declare module "next-auth" {
-  interface Session {
-    user: {
-      username: string;
-      bank: Bank;
-    };
-  }
-}
-
 interface DashboardClientProps {
   session: Session;
 }
@@ -49,6 +40,7 @@ export default function DashboardClient({ session }: DashboardClientProps) {
   const [txHash, setTxHash] = useState("");
   const [txIndex, setTxIndex] = useState("0");
   const [newOwner, setNewOwner] = useState(transferTargets[0]);
+  const [transferAmount, setTransferAmount] = useState("100");
   const [transferStatus, setTransferStatus] = useState<string>("");
 
   const [redeemAmount, setRedeemAmount] = useState("100");
@@ -211,6 +203,12 @@ export default function DashboardClient({ session }: DashboardClientProps) {
       return;
     }
 
+    if (!transferAmount || Number(transferAmount) <= 0) {
+      toast.error("Jumlah transfer tidak valid.");
+      setTransferStatus("Jumlah transfer tidak valid.");
+      return;
+    }
+
     setIsSubmitting(true);
     setTransferStatus("Memproses transfer...");
     toast.info("Memproses transfer...");
@@ -223,11 +221,24 @@ export default function DashboardClient({ session }: DashboardClientProps) {
           txHash: txHash.trim(),
           index: Number(txIndex),
           newOwner,
+          amount: Number(transferAmount),
         }),
       });
 
       const data = await res.json();
-      setTransferStatus(data.message || "Status tidak diketahui");
+      const newOwnerIndex =
+        data.newOwnerIndex !== undefined ? Number(data.newOwnerIndex) : undefined;
+      const remainingOwnerIndex =
+        data.remainingOwnerIndex !== undefined
+          ? Number(data.remainingOwnerIndex)
+          : undefined;
+      const statusDetails =
+        newOwnerIndex !== undefined
+          ? ` (Index penerima: ${newOwnerIndex}${
+              remainingOwnerIndex !== undefined ? `, Index sisa: ${remainingOwnerIndex}` : ""
+            })`
+          : "";
+      setTransferStatus((data.message || "Status tidak diketahui") + statusDetails);
 
       if (data.status === "success") {
         toast.success("Transfer berhasil!");
@@ -237,8 +248,15 @@ export default function DashboardClient({ session }: DashboardClientProps) {
           time: new Date().toISOString(),
           type: "Transfer" as const,
           txHash: data.txId,
-          index: data.index,
-          description: `${newOwner} menerima kepemilikan`,
+          index: newOwnerIndex ?? 0,
+          amount: Number(transferAmount),
+          newOwnerIndex: newOwnerIndex ?? null,
+          remainingOwnerIndex: remainingOwnerIndex ?? null,
+          description: `Transfer Rp ${transferAmount} ke ${newOwner}${
+            remainingOwnerIndex !== undefined
+              ? ` (sisa untuk pengirim di index ${remainingOwnerIndex})`
+              : ""
+          }`,
           owner: targetBank,
           participants: [bank, targetBank],
         };
@@ -420,6 +438,20 @@ export default function DashboardClient({ session }: DashboardClientProps) {
                 placeholder="Hash dari hasil Issue"
                 value={txHash}
                 onChange={(e) => setTxHash(e.target.value)}
+              />
+              <Input
+                label="Index State"
+                type="number"
+                min={0}
+                value={txIndex}
+                onChange={(e) => setTxIndex(e.target.value)}
+              />
+              <Input
+                label="Jumlah Transfer (Rp)"
+                type="number"
+                min={1}
+                value={transferAmount}
+                onChange={(e) => setTransferAmount(e.target.value)}
               />
               <Select
                 label="Pemilik Baru"

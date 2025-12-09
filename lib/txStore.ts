@@ -9,8 +9,13 @@ export interface TxRow {
   time: string;
   type: TxType;
   txHash: string;
-  index: number;
   description: string;
+  index?: number;
+  amount?: number;
+  owner?: string;
+  participants?: string[];
+  newOwnerIndex?: number | null;
+  remainingOwnerIndex?: number | null;
 }
 
 interface TxStore {
